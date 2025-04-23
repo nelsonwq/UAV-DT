@@ -5,6 +5,7 @@ from algorithm import DDPG
 from Agent import Agent
 from ReplayMemory import ReplayMemory
 from UAVCommModel import UAVCommModel
+from HyperParams import HyperParams as hp
 
 ACTOR_LR = 1e-3
 CRITIC_LR = 1e-3
@@ -14,7 +15,9 @@ MEMORY_SIZE = 200000
 MEMORY_WARMUP_SIZE = 2000
 BATCH_SIZE = 64
 NOISE = 0.05  # 动作噪声方差
-
+EPSILON = 0.95  # 探索
+MIN_EPSILON = 0.001  # 保留一定的随机率，不能有迹可循
+EPS_DECAY = 0.9998  # 衰减
 
 def run_episode(agent, env, rpm):
     obs, obs_normalization = env.reset()
@@ -25,15 +28,30 @@ def run_episode(agent, env, rpm):
     while True:
         steps += 1
         cur_point += 1
-        action = agent.predict(obs.astype('float32'))
+        if np.random.random() < hp.EPSILON:
+            # 随机生成动作
+            action = np.empty((2, ))
+            # 任务分配比例，区间为 [0, 1]
+            action[0] = np.random.uniform(0, 1)
+            # UAV 的传输功率，区间为 [1, 5]
+            action[1] = np.random.uniform(1, 5)
+        else:
+            action = agent.predict(obs_normalization.astype('float32'))
         # print(f"action===={action}")
         # action = np.clip(np.random.normal(action, NOISE), 0, 1)
+        # print(action)
         next_obs, next_obs_normalization, reward, done = env.step(cur_point, obs, action)  # obs是uav位置，action是任务分配比例
+
 
         rpm.append((obs_normalization, action, reward, next_obs_normalization, done))
 
         if len(rpm) > MEMORY_WARMUP_SIZE and (steps % 5) == 0:
             (batch_obs, batch_action, batch_reward, batch_next_obs, batch_done) = rpm.sample(BATCH_SIZE)
+            print(f'batch_obs.shape:{batch_obs.shape}')
+            print(f'batch_action.shape:{batch_action.shape}')
+            print(f'batch_reward.shape:{batch_reward.shape}')
+            print(f'batch_next_obs.shape:{batch_next_obs.shape}')
+            print(f'batch_done.shape:{batch_done.shape}')
             train_loss = agent.learn(batch_obs, batch_action, batch_reward, batch_next_obs, batch_done)
             total_loss += train_loss
 
@@ -41,9 +59,12 @@ def run_episode(agent, env, rpm):
         obs_normalization = next_obs_normalization
         total_reward += reward
 
+
         if done:
             total_loss = total_loss / steps
             break
+    hp.EPSILON *= hp.EPS_DECAY  # 逐渐缩减
+    hp.EPSILON = max(hp.EPSILON, hp.MIN_EPSILON)  # 保留一定的随机性，让智能体猜不到
 
     step_sum = steps
     total_reward = total_reward + step_sum

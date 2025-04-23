@@ -30,14 +30,17 @@ class UAVCommModel(nn.Module):
         )
 
     def forward(self, obs, act=None):
-        obs = obs.reshape(-1, 5)
+        # print(obs.shape)  # (5,)
         encoded = self.obs_encoder(obs)
         # print(f'encoded.shape=={encoded.shape}')
 
         if act is None:
-            return self.actor(encoded)
+            act = self.actor(encoded)
+            print(f'act:{act}')
+            return act
         else:
-            act = act.reshape(-1, 2)
+            # print(encoded.shape)  # (64,)
+            print(act)
             return self.critic(torch.cat([encoded, act], dim=1))
 
     def get_actor_params(self):
@@ -48,16 +51,19 @@ class PowerAndRatioConstraint(nn.Module):
 
     def forward(self, x):
 
-        x = x.reshape(-1, 2)
         # 使用tanh激活+线性变换（梯度更稳定）
-        ratio_trans = 0.4 * torch.tanh(x[:, 0]) + 0.5  # 中心在0.5
-        safe_ratio = 0.1 + 0.8 * ratio_trans  # [0.1,0.9]
+        if len(x) == 2:
+            ratio_trans = 0.4 * torch.tanh(x[0]) + 0.5  # 中心在0.5
+            power_trans = torch.nn.functional.softplus(x[1])
+        else:
+            ratio_trans = 0.4 * torch.tanh(x[:, 0]) + 0.5  # 中心在0.5
+            power_trans = torch.nn.functional.softplus(x[:, 1])
 
+        safe_ratio = 0.1 + 0.8 * ratio_trans  # [0.1, 0.9]
         # 采用Softplus保证正梯度
-        power_trans = torch.nn.functional.softplus(x[:, 1])
-        safe_power = 1 + 4 * (power_trans / (1 + power_trans))  # [1,5]
-
-        return torch.stack([safe_ratio, safe_power], dim=1)
+        safe_power = 1 + 4 * (power_trans / (1 + power_trans))  # [1, 5]
+        print(safe_ratio.shape, safe_power.shape)
+        return safe_ratio, safe_power
 
 
 # 示例用法

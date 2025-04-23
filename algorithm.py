@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from copy import deepcopy
+import torch.nn.functional as F
 
 class DDPG:
     def __init__(self, model, gamma=None, tau=None, actor_lr=None, critic_lr=None):
@@ -19,7 +20,7 @@ class DDPG:
     def predict(self, obs):
         # print(f'DDPG----{obs}')
         with torch.no_grad():
-            action =self.model.forward(obs)
+            action = self.model.forward(obs)
             # print(f"action===={action}")
             return action
 
@@ -32,6 +33,7 @@ class DDPG:
         self.actor_optimizer.zero_grad()
 
         action = self.model.forward(obs)
+        # print(f'action:{action}')
         Q = self.model.forward(obs, action)
         loss = -Q.mean()
 
@@ -42,13 +44,15 @@ class DDPG:
     def _critic_learn(self, obs, act, reward, next_obs, done):
         self.critic_optimizer.zero_grad()
 
+
+
         with torch.no_grad():
             next_action = self.target_model.forward(next_obs)
             next_Q = self.target_model.forward(next_obs, next_action)
-            target_Q = reward.view(-1, 1) + (1 - done.view(-1, 1).float()) * self.gamma * next_Q
+            target_Q = reward + (1 - done.float()) * self.gamma * next_Q
 
         current_Q = self.model.forward(obs, act)
-        loss = nn.functional.mse_loss(current_Q, target_Q)
+        loss = F.mse_loss(current_Q, target_Q)
         loss.backward()
         self.critic_optimizer.step()
         return loss

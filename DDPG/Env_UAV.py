@@ -1,7 +1,5 @@
 import math
-
 import numpy as np
-from sklearn import preprocessing
 
 
 class Environment:
@@ -32,6 +30,8 @@ class Environment:
         self.X = 500  # 500m
         self.Y = 500  # 500m
         self.Z = 200  # 200m
+        self.state_dim = 6
+        self.action_dim = 1
 
         """
         1.设置采集点的位置，制定飞行轨迹，飞行轨迹经过这些采集点
@@ -45,17 +45,17 @@ class Environment:
         vsp_location = list()
         dcp_location = list()
         data_volume = list()
-        with open('./VSP_location.txt') as f:
+        with open('../VSP_location.txt') as f:
             for i in f.readlines():
                 x, y, z = [int(j) for j in i.split()]
                 vsp_location.append([x, y, z])
 
-        with open('./transmission_points.txt') as f:
+        with open('../transmission_points.txt') as f:
             for i in f.readlines():
                 x, y, z = [int(j) for j in i.split()]
                 dcp_location.append([x, y, z])
 
-        with open('./data_volume.txt') as f:
+        with open('../data_volume1.txt') as f:
             for i in f.readlines():
                 q = [float(j) for j in i.split()]
                 data_volume.append(q)
@@ -73,12 +73,13 @@ class Environment:
         观测空间包含UAV的位置(uav_num, 3)、传输功率 (uav_num, 1)
         当前无人机个数为 1
         """
-        obs = np.empty(shape=(5, ))
+        obs = np.empty(shape=(6, ))
         obs[0] = self.uav_location[0]
         obs[1] = self.uav_location[1]
         obs[2] = self.uav_location[2]
         obs[3] = 5  # 传输速率1
         obs[4] = 5  # 传输速率2
+        obs[5] = 0  # current_point
         # min_max_scaler = preprocessing.MinMaxScaler(feature_range=(0, 1))
         # obs_normalization = min_max_scaler.fit_transform(obs)
         obs_normalization = obs
@@ -96,7 +97,7 @@ class Environment:
         # uav_pos3 = np.array([[313, 369, 41], [271, 430, 56], [186, 469, 61], [194, 394, 64], [248, 316, 65]])
         # uav_pos4 = np.array([[395, 371, 60], [488, 354, 66], [428, 300, 60], [449, 232, 58], [324, 259, 60]])
 
-    def step(self, cur_point, obs, action):
+    def step(self, obs, action):
         """
         更新动作
         :param obs uav位置，通信速率
@@ -104,33 +105,39 @@ class Environment:
         :return:
         """
         done = False
-        next_obs = np.empty(shape=(5,))
-        next_obs[0] = self.dcp_location[cur_point - 1][0]
-        next_obs[1] = self.dcp_location[cur_point - 1][1]
-        next_obs[2] = self.dcp_location[cur_point - 1][2]
+        next_obs = np.empty(shape=(6,))
+        # print(obs)
+        next_obs[0] = self.dcp_location[int(obs[5]) - 1][0]
+        next_obs[1] = self.dcp_location[int(obs[5]) - 1][1]
+        next_obs[2] = self.dcp_location[int(obs[5]) - 1][2]
 
         # 从动作中提取任务分配比例和传输到 vsp1 的功率
-        task_ratio = action[0]
-        power_to_vsp1 = action[1]
-        power_to_vsp2 = self.max_power_UAV - power_to_vsp1
-        next_obs[3] = self.get_comm_rate(next_obs[:3], power_to_vsp1, self.vsp_location[0])
-        next_obs[4] = self.get_comm_rate(next_obs[:3], power_to_vsp2, self.vsp_location[1])
+        # task_ratio = action[0]
+
+        task_ratio = action
+        # power_to_vsp1 = action[1]
+
+        # power_to_vsp2 = self.max_power_UAV - power_to_vsp1
+        # power_to_vsp = action[1]
+        power_to_vsp = 2
+        next_obs[3] = self.get_comm_rate(next_obs[:3], power_to_vsp, self.vsp_location[0])
+        next_obs[4] = self.get_comm_rate(next_obs[:3], power_to_vsp, self.vsp_location[1])
+        next_obs[5] = int(obs[5]) + 1
 
         # next_obs[0][3] = np.random.randint(1, 5)  # 功率
-        Q = self.data_volume[cur_point - 1][0]
-        comm_delay_first = self.get_comm_delay(Q, action[0], next_obs[:3], power_to_vsp1, self.vsp_location[0])
-        comm_delay_second = self.get_comm_delay(Q, 1 - action[0], next_obs[:3], power_to_vsp2, self.vsp_location[1])
-        delay = -max(comm_delay_first, comm_delay_second) * 10
-        bonus = math.fabs(comm_delay_first - comm_delay_second)  # 鼓励差值尽可能的小
+        Q = self.data_volume[int(obs[5]) - 1][0]
+        comm_delay_first = self.get_comm_delay(Q, task_ratio, next_obs[:3], power_to_vsp, self.vsp_location[0])
+        comm_delay_second = self.get_comm_delay(Q, 1 - task_ratio, next_obs[:3], power_to_vsp, self.vsp_location[1])
+        delay = -math.fabs(comm_delay_first-comm_delay_second) * 10
         # print(delay, bonus)
-        reward = delay + bonus
+        reward = delay
 
-        # print(
-        #     f"uav_location={next_obs[0][:3]}, q1={Q * action[0][0]}, q2={Q * (1 - action[0][0])} comm_rate1={next_obs[0][3]}, comm_rate2={next_obs[0][4]}")
-        # print(
-        #     f'task ratio={action[0][0]}, uav_power={action[0][1]}, comm_delay_first={comm_delay_first}, comm_delay_second={comm_delay_second}, reward={reward}')
+        print(f"uav_location={next_obs[:3]}, q1={Q * action:.6f}, q2={Q * (1 - action):.6f} \
+                comm_rate1={next_obs[3]:.6f}, comm_rate2={next_obs[4]:.6f}")
+        print(f'task ratio={action:.6f}, uav_power={power_to_vsp:.6f}, comm_delay_first={comm_delay_first:.6f}, \
+            comm_delay_second={comm_delay_second:.6f}, reward={reward:.6f}')
 
-        if cur_point == self.dcp_num:
+        if obs[5] == self.dcp_num:
             done = True
 
         next_obs_normalization = next_obs

@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 
 class Agent:
     def __init__(self, algorithm, obs_dim, act_dim):
@@ -16,14 +17,19 @@ class Agent:
             obs_tensor = torch.FloatTensor(obs)
             action = self.algorithm.predict(obs_tensor)
             # print(f"action===={action}")
-        return action.cpu().detach().numpy()
+        return action
 
     def learn(self, obs, act, reward, next_obs, done):
+        # print(f'obs.shape:{obs.shape}')
+        # print(f'act.shape:{act.shape}')
+        # print(f'reward.shape:{reward.shape}')
+        # print(f'next_obs.shape:{next_obs.shape}')
+        # print(f'done.shape:{done.shape}')
         obs = torch.FloatTensor(obs)
-        act = torch.FloatTensor(act)
-        reward = torch.FloatTensor(reward)
+        act = torch.FloatTensor(np.vstack(act))
+        reward = torch.FloatTensor(reward).unsqueeze(1)
         next_obs = torch.FloatTensor(next_obs)
-        done = torch.FloatTensor(done)
+        done = torch.FloatTensor(done).unsqueeze(1)
 
         _, loss = self.algorithm.learn(obs, act, reward, next_obs, done)
         self._sync_target()
