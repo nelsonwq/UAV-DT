@@ -39,6 +39,7 @@
 # with open(f'./data_volume.txt', 'w+') as f:
 #     for i in data_points:
 #         f.write(f"{i}\n")
-import numpy as np
 
-print(np.empty(shape=(2,)))
+
+
+

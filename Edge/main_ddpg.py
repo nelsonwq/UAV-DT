@@ -28,7 +28,7 @@ EPSILON_DECAY = 10000
 REWARD_BUFFER = np.empty(shape=NUM_EPISODE)
 
 for episode_i in range(NUM_EPISODE):
-    state, state_normalization = env.reset()
+    state = env.reset()
     # print(f'state:{state}')
     episode_reward = 0
     for step_i in range(NUM_STEP):
@@ -40,15 +40,14 @@ for episode_i in range(NUM_EPISODE):
             action[0] = round(np.random.uniform(low=0, high=1), 6)
             action[1] = round(np.random.uniform(low=1, high=5), 6)
         else:  # 开发
-            action = agent.get_action(state_normalization)
+            action = agent.get_action(state)
             action[0] = round(action[0], 6)  # 确保任务分配比例在 [0, 1] 之间
             action[1] = round(action[1], 6)  # 确保功率在 [1, 5] 之间
 
-        next_state, next_state_normalization, reward, done = env.step(state, action)
+        next_state, reward, done = env.step(state, action)
         agent.replay_buffer.add_memo(state, action, reward, next_state, done)
 
         state = next_state
-        state_normalization = next_state_normalization
         episode_reward += reward
 
         agent.update()

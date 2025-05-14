@@ -31,7 +31,7 @@ class Environment:
         self.Y = 500  # 500m
         self.Z = 200  # 200m
         self.state_dim = 6
-        self.action_dim = 2
+        self.action_dim = 1
 
         """
         1.设置采集点的位置，制定飞行轨迹，飞行轨迹经过这些采集点
@@ -55,7 +55,7 @@ class Environment:
                 x, y, z = [int(j) for j in i.split()]
                 dcp_location.append([x, y, z])
 
-        with open('../data_volume.txt') as f:
+        with open('../data_volume1.txt') as f:
             for i in f.readlines():
                 q = [float(j) for j in i.split()]
                 data_volume.append(q)
@@ -86,8 +86,8 @@ class Environment:
         obs_normalization[0] = obs[0] / self.X  # (X-X_min)/(X_max-X_min)
         obs_normalization[1] = obs[1] / self.Y  # 500
         obs_normalization[2] = obs[2] / self.Z  # 200
-        obs_normalization[3] = obs[3] / 100
-        obs_normalization[4] = obs[4] / 100
+        obs_normalization[3] = obs[3] / 50
+        obs_normalization[4] = obs[4] / 50
         return obs, obs_normalization
 
         # vsp_pos1 = np.array([100, 100, 0])
@@ -118,19 +118,19 @@ class Environment:
         # power_to_vsp1 = action[1]
 
         # power_to_vsp2 = self.max_power_UAV - power_to_vsp1
-        power_to_vsp = action[1]
-        # power_to_vsp = 2
+        # power_to_vsp = action[1]
+        power_to_vsp = 2
         next_obs[3] = self.get_comm_rate(next_obs[:3], power_to_vsp, self.vsp_location[0])
         next_obs[4] = self.get_comm_rate(next_obs[:3], power_to_vsp, self.vsp_location[1])
         next_obs[5] = int(obs[5]) + 1
-
         # next_obs[0][3] = np.random.randint(1, 5)  # 功率
         Q = self.data_volume[int(obs[5]) - 1][0]
         comm_delay_first = self.get_comm_delay(Q, task_ratio, next_obs[:3], power_to_vsp, self.vsp_location[0])
         comm_delay_second = self.get_comm_delay(Q, 1 - task_ratio, next_obs[:3], power_to_vsp, self.vsp_location[1])
         delay = -math.fabs(comm_delay_first-comm_delay_second) * 10
+        bonus = (self.max_power_UAV - power_to_vsp) * 3
         # print(delay, bonus)
-        reward = delay
+        reward = delay + bonus
 
         # print(f"uav_location={next_obs[:3]}, q1={Q * task_ratio:.6f}, q2={Q * (1 - task_ratio):.6f} \
         #         comm_rate1={next_obs[3]:.6f}, comm_rate2={next_obs[4]:.6f}")
@@ -144,8 +144,8 @@ class Environment:
         next_obs_normalization[0] = next_obs[0] / self.X  # (X-X_min)/(X_max-X_min)
         next_obs_normalization[1] = next_obs[1] / self.Y  # 500
         next_obs_normalization[2] = next_obs[2] / self.Z  # 200
-        next_obs_normalization[3] = next_obs[3] / 100
-        next_obs_normalization[4] = next_obs[4] / 100
+        next_obs_normalization[3] = next_obs[3] / 50
+        next_obs_normalization[4] = next_obs[4] / 50
         # min_max_scaler = preprocessing.MinMaxScaler(feature_range=(0, 1))
         # next_obs_normalization = min_max_scaler.fit_transform(next_obs)
         # print(f'normal={next_obs_normalization}')
@@ -182,6 +182,7 @@ class Environment:
                        / ((4 * math.pi) ** 2 * (self.get_dist_m_v(uav_pos, vsp_pos) ** 2))
         Gamma = uav_power * channel_gain / self.N_0
         R = self.W * math.log(1 + Gamma)
+        # print(f'comm_rate:{R}')
         return R
 
     def get_comm_delay(self, Q, alpha, uav_pos, uav_power, vsp_pos):

@@ -31,7 +31,7 @@ class Environment:
         self.Y = 500  # 500m
         self.Z = 200  # 200m
         self.state_dim = 6
-        self.action_dim = 2
+        self.action_dim = 10
 
         """
         1.设置采集点的位置，制定飞行轨迹，飞行轨迹经过这些采集点
@@ -55,7 +55,7 @@ class Environment:
                 x, y, z = [int(j) for j in i.split()]
                 dcp_location.append([x, y, z])
 
-        with open('../data_volume.txt') as f:
+        with open('../data_volume1.txt') as f:
             for i in f.readlines():
                 q = [float(j) for j in i.split()]
                 data_volume.append(q)
@@ -77,8 +77,8 @@ class Environment:
         obs[0] = self.uav_location[0]
         obs[1] = self.uav_location[1]
         obs[2] = self.uav_location[2]
-        obs[3] = 5  # 传输速率1
-        obs[4] = 5  # 传输速率2
+        obs[3] = 1  # 传输速率1
+        obs[4] = 20  # 传输速率2
         obs[5] = 0  # current_point
         # min_max_scaler = preprocessing.MinMaxScaler(feature_range=(0, 1))
         # obs_normalization = min_max_scaler.fit_transform(obs)
@@ -86,8 +86,8 @@ class Environment:
         obs_normalization[0] = obs[0] / self.X  # (X-X_min)/(X_max-X_min)
         obs_normalization[1] = obs[1] / self.Y  # 500
         obs_normalization[2] = obs[2] / self.Z  # 200
-        obs_normalization[3] = obs[3] / 100
-        obs_normalization[4] = obs[4] / 100
+        obs_normalization[3] = obs[3] / 50
+        obs_normalization[4] = obs[4] / 50
         return obs, obs_normalization
 
         # vsp_pos1 = np.array([100, 100, 0])
@@ -96,6 +96,12 @@ class Environment:
         # uav_pos2 = np.array([[106, 60, 73], [199, 27, 67], [217, 104, 67], [334, 166, 72], [423, 122, 58]])
         # uav_pos3 = np.array([[313, 369, 41], [271, 430, 56], [186, 469, 61], [194, 394, 64], [248, 316, 65]])
         # uav_pos4 = np.array([[395, 371, 60], [488, 354, 66], [428, 300, 60], [449, 232, 58], [324, 259, 60]])
+
+
+
+    # 将离散动作索引转换为连续的任务分配比例
+    def discrete_to_continuous(self, action_index):
+        return action_index / (self.action_dim - 1)
 
     def step(self, obs, action):
         """
@@ -113,13 +119,13 @@ class Environment:
 
         # 从动作中提取任务分配比例和传输到 vsp1 的功率
         # task_ratio = action[0]
-
-        task_ratio = action[0]
+        # 离散动作转连续动作
+        task_ratio = self.discrete_to_continuous(action)
         # power_to_vsp1 = action[1]
 
         # power_to_vsp2 = self.max_power_UAV - power_to_vsp1
-        power_to_vsp = action[1]
-        # power_to_vsp = 2
+        # power_to_vsp = action[1]
+        power_to_vsp = 2
         next_obs[3] = self.get_comm_rate(next_obs[:3], power_to_vsp, self.vsp_location[0])
         next_obs[4] = self.get_comm_rate(next_obs[:3], power_to_vsp, self.vsp_location[1])
         next_obs[5] = int(obs[5]) + 1
@@ -129,13 +135,14 @@ class Environment:
         comm_delay_first = self.get_comm_delay(Q, task_ratio, next_obs[:3], power_to_vsp, self.vsp_location[0])
         comm_delay_second = self.get_comm_delay(Q, 1 - task_ratio, next_obs[:3], power_to_vsp, self.vsp_location[1])
         delay = -math.fabs(comm_delay_first-comm_delay_second) * 10
+        # bonus = (self.max_power_UAV - power_to_vsp) * 3
         # print(delay, bonus)
         reward = delay
 
-        # print(f"uav_location={next_obs[:3]}, q1={Q * task_ratio:.6f}, q2={Q * (1 - task_ratio):.6f} \
-        #         comm_rate1={next_obs[3]:.6f}, comm_rate2={next_obs[4]:.6f}")
-        # print(f'task ratio={task_ratio:.6f}, uav_power={power_to_vsp:.6f}, comm_delay_first={comm_delay_first:.6f}, \
-        #     comm_delay_second={comm_delay_second:.6f}, reward={reward:.6f}')
+        print(f"uav_location={next_obs[:3]}, q1={Q * task_ratio:.6f}, q2={Q * (1 - task_ratio):.6f} \
+                comm_rate1={next_obs[3]:.6f}, comm_rate2={next_obs[4]:.6f}")
+        print(f'task ratio={task_ratio:.6f}, uav_power={power_to_vsp:.6f}, comm_delay_first={comm_delay_first:.6f}, \
+            comm_delay_second={comm_delay_second:.6f}, reward={reward:.6f}')
 
         if obs[5] == self.dcp_num:
             done = True
@@ -144,8 +151,8 @@ class Environment:
         next_obs_normalization[0] = next_obs[0] / self.X  # (X-X_min)/(X_max-X_min)
         next_obs_normalization[1] = next_obs[1] / self.Y  # 500
         next_obs_normalization[2] = next_obs[2] / self.Z  # 200
-        next_obs_normalization[3] = next_obs[3] / 100
-        next_obs_normalization[4] = next_obs[4] / 100
+        next_obs_normalization[3] = next_obs[3] / 50
+        next_obs_normalization[4] = next_obs[4] / 50
         # min_max_scaler = preprocessing.MinMaxScaler(feature_range=(0, 1))
         # next_obs_normalization = min_max_scaler.fit_transform(next_obs)
         # print(f'normal={next_obs_normalization}')
